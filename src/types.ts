@@ -62,6 +62,15 @@ export interface ClassMetadata {
   curriculum: string;  // Kurikulum Merdeka atau K13
   timeAllocation: string; // e.g. 2 x 35 menit
   academicYear: string;  // e.g. 2025/2026
+  schoolName?: string;
+  kopHeader1?: string;
+  kopHeader2?: string;
+  kopAddress?: string;
+  uploadedLogoUrl?: string;
+  headmasterName?: string;
+  headmasterNip?: string;
+  teacherName?: string;
+  teacherNip?: string;
 }
 
 export interface QuestionSetting {

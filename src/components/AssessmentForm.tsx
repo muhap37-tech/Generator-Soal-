@@ -81,6 +81,15 @@ export default function AssessmentForm({ onGenerate, isLoading }: AssessmentForm
     curriculum: "Kurikulum Merdeka",
     timeAllocation: "2 x 35 Menit",
     academicYear: "2025/2026",
+    schoolName: "SD Negeri Cerdas Bangsa",
+    kopHeader1: "PEMERINTAH KABUPATEN / DINAS PENDIDIKAN",
+    kopHeader2: "UPTD SATUAN PENDIDIKAN SD NEGERI CERDAS BANGSA",
+    kopAddress: "Jl. Diponegoro No. 10, Kecamatan Nusantara, 2026",
+    uploadedLogoUrl: "",
+    headmasterName: "Muh. Asriwadi AP, S.Pd., M.Pd.",
+    headmasterNip: "19880102 201201 1 003",
+    teacherName: "Guru Mata Pelajaran, S.Pd.",
+    teacherNip: "19940304 201903 2 004",
   });
 
   // Auto-set Phase when Education Level changes to assist teachers
@@ -550,6 +559,204 @@ export default function AssessmentForm({ onGenerate, isLoading }: AssessmentForm
                 className="w-full px-2 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl font-sans text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 placeholder="e.g. 2 x 35 menit"
               />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* SECTION 1.5: PENGATURAN KOP SURAT (DOKUMEN) & LOGO SEKOLAH */}
+      <div className="p-6 rounded-2xl glass-card border border-white/20 dark:border-slate-800 shadow-sm space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div className="flex items-center gap-2">
+            <Image className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+            <h3 className="text-lg font-display font-bold text-slate-930 dark:text-white">
+              Kop Dokumen & Logo Sekolah (Opsional)
+            </h3>
+          </div>
+          <span className="text-[10px] bg-slate-100 dark:bg-slate-950 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-full font-mono font-semibold">
+            Kop & Tanda Tangan
+          </span>
+        </div>
+
+        <p className="text-xs text-slate-500 dark:text-slate-400 leading-normal">
+          Konfigurasikan informasi kepala surat resmi (Kop) dan tanda tangan yang akan dicetak di lembar kisi-kisi, naskah soal, dan kunci jawaban. Unggah logo sekolah dalam format JPG/PNG/SVG.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
+          {/* Logo Uploader / Preview column (4 cols) */}
+          <div className="md:col-span-4 space-y-3">
+            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400">
+              Logo Sekolah / Instansi
+            </label>
+            
+            <div className="border border-dashed border-slate-200 dark:border-slate-800 rounded-xl p-4 flex flex-col items-center justify-center text-center space-y-3 bg-slate-50/50 dark:bg-slate-950/20">
+              {metadata.uploadedLogoUrl ? (
+                <div className="relative group w-full">
+                  <img
+                    src={metadata.uploadedLogoUrl}
+                    alt="Logo Sekolah Preview"
+                    className="h-20 w-auto object-contain mx-auto rounded-md shadow-xs bg-white p-1"
+                    referrerPolicy="no-referrer"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setMetadata({ ...metadata, uploadedLogoUrl: "" })}
+                    className="mt-2 text-4xs text-red-500 hover:font-bold block w-full text-center hover:underline"
+                  >
+                    Hapus Logo
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <UploadCloud className="h-8 w-8 text-indigo-500 animate-pulse" />
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-slate-500 font-medium">Klik untuk pilih logo</p>
+                    <p className="text-[8px] text-slate-400">PNG, JPG, SVG (Maks. 2MB)</p>
+                  </div>
+                </>
+              )}
+              
+              <input
+                id="logo-school-upload"
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  if (file.size > 2 * 1024 * 1024) {
+                    alert("Ukuran berkas logo terlalu besar! Maksimal 2MB.");
+                    return;
+                  }
+                  const reader = new FileReader();
+                  reader.onload = (event) => {
+                    const result = event.target?.result as string;
+                    setMetadata({ ...metadata, uploadedLogoUrl: result });
+                  };
+                  reader.readAsDataURL(file);
+                }}
+                className={`w-full text-3xs ${metadata.uploadedLogoUrl ? "hidden" : ""}`}
+              />
+            </div>
+          </div>
+
+          {/* Kop text config inputs (8 cols) */}
+          <div className="md:col-span-8 space-y-3">
+            <div>
+              <label className="block text-[10px] font-mono uppercase font-bold text-slate-500 dark:text-slate-400 mb-1">
+                Baris Kop 1 (Instansi Utama)
+              </label>
+              <input
+                type="text"
+                value={metadata.kopHeader1}
+                onChange={(e) => setMetadata({ ...metadata, kopHeader1: e.target.value })}
+                className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl font-sans text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                placeholder="PEMERINTAH KABUPATEN / DINAS PENDIDIKAN"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-mono uppercase font-bold text-slate-500 dark:text-slate-400 mb-1">
+                Baris Kop 2 (Satuan Pendidikan)
+              </label>
+              <input
+                type="text"
+                value={metadata.kopHeader2}
+                onChange={(e) => setMetadata({ ...metadata, kopHeader2: e.target.value })}
+                className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl font-sans text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                placeholder="UPTD SATUAN PENDIDIKAN SD NEGERI CERDAS BANGSA"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[10px] font-mono uppercase font-bold text-slate-500 dark:text-slate-400 mb-1">
+                  Nama Sekolah (Singkat)
+                </label>
+                <input
+                  type="text"
+                  value={metadata.schoolName}
+                  onChange={(e) => setMetadata({ ...metadata, schoolName: e.target.value })}
+                  className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl font-sans text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  placeholder="SD Negeri Cerdas Bangsa"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-mono uppercase font-bold text-slate-500 dark:text-slate-400 mb-1">
+                  Alamat & Kontak Sekolah
+                </label>
+                <input
+                  type="text"
+                  value={metadata.kopAddress}
+                  onChange={(e) => setMetadata({ ...metadata, kopAddress: e.target.value })}
+                  className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl font-sans text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  placeholder="Jl. Diponegoro No. 10, Kecamatan Nusantara"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Signatures/Penandatangan Block */}
+        <div className="border-t border-slate-100 dark:border-slate-800 pt-3">
+          <span className="text-xs font-display font-semibold text-slate-800 dark:text-slate-200 block mb-2">
+            Identitas Tanda Tangan Dokumen
+          </span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="p-3 rounded-xl bg-slate-50/40 dark:bg-slate-950/20 border border-slate-150 dark:border-slate-850 space-y-2">
+              <span className="text-[10px] font-mono uppercase font-bold text-indigo-600 dark:text-indigo-400 block pb-1 border-b border-slate-100 dark:border-slate-850">
+                Kepala Satuan Pendidikan / Kepala Sekolah
+              </span>
+              <div className="grid grid-cols-1 gap-2">
+                <div>
+                  <label className="block text-[9px] font-mono uppercase text-slate-400 mb-1">Nama Kepala Sekolah</label>
+                  <input
+                    type="text"
+                    value={metadata.headmasterName}
+                    onChange={(e) => setMetadata({ ...metadata, headmasterName: e.target.value })}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg font-sans text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500/20"
+                    placeholder="Nama Kepala Sekolah"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-mono uppercase text-slate-400 mb-1">NIP Kepala Sekolah</label>
+                  <input
+                    type="text"
+                    value={metadata.headmasterNip}
+                    onChange={(e) => setMetadata({ ...metadata, headmasterNip: e.target.value })}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg font-sans text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500/20"
+                    placeholder="NIP Kepala Sekolah"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-50/40 dark:bg-slate-950/20 border border-slate-150 dark:border-slate-850 space-y-2">
+              <span className="text-[10px] font-mono uppercase font-bold text-indigo-600 dark:text-indigo-400 block pb-1 border-b border-slate-100 dark:border-slate-850">
+                Penyusun Soal / Guru Mata Pelajaran
+              </span>
+              <div className="grid grid-cols-1 gap-2">
+                <div>
+                  <label className="block text-[9px] font-mono uppercase text-slate-400 mb-1">Nama Guru Penyusun</label>
+                  <input
+                    type="text"
+                    value={metadata.teacherName}
+                    onChange={(e) => setMetadata({ ...metadata, teacherName: e.target.value })}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg font-sans text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500/20"
+                    placeholder="Nama Guru"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-mono uppercase text-slate-400 mb-1">NIP Guru Penyusun</label>
+                  <input
+                    type="text"
+                    value={metadata.teacherNip}
+                    onChange={(e) => setMetadata({ ...metadata, teacherNip: e.target.value })}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg font-sans text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500/20"
+                    placeholder="NIP Guru"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>

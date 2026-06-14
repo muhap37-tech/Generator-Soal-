@@ -1,9 +1,9 @@
-import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, WidthType, BorderStyle } from "docx";
+import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, WidthType, BorderStyle, ImageRun } from "docx";
 import jsPDF from "jspdf";
 import JSZip from "jszip";
 import { GeneratedAssessment } from "../types";
 
-// Standard browser anchor download helper for Blog/Chunks to prevent extra dependency issues
+// Standard browser anchor download helper
 const downloadBlob = (blob: Blob, filename: string) => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -15,17 +15,300 @@ const downloadBlob = (blob: Blob, filename: string) => {
   URL.revokeObjectURL(url);
 };
 
+// Helper to safely convert base64 image data to an ArrayBuffer
+const base64ToUint8Array = (base64String: string): ArrayBuffer | null => {
+  try {
+    if (!base64String) return null;
+    const parts = base64String.split(",");
+    const base64Data = parts[1] || parts[0];
+    const binaryString = window.atob(base64Data);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes.buffer;
+  } catch (e) {
+    console.error("Gagal menstandardisasi base64 data untuk logo:", e);
+    return null;
+  }
+};
+
+// Generates the official letterhead table for DOCX
+const createDocxKopTable = (meta: any) => {
+  let logoChildren: any[] = [];
+  const buffer = meta.uploadedLogoUrl ? base64ToUint8Array(meta.uploadedLogoUrl) : null;
+
+  if (buffer) {
+    logoChildren = [
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [
+          new ImageRun({
+            data: buffer,
+            transformation: {
+              width: 60,
+              height: 60,
+            },
+            type: "png",
+          } as any),
+        ],
+      }),
+    ];
+  } else {
+    // Elegant fallback shape if logo is absent
+    logoChildren = [
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [
+          new TextRun({ text: "★", size: 30, bold: true, color: "111111" }),
+        ],
+      }),
+    ];
+  }
+
+  const textChildren = [
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      children: [
+        new TextRun({
+          text: (meta.kopHeader1 || "PEMERINTAH KABUPATEN / DINAS PENDIDIKAN").toUpperCase(),
+          bold: true,
+          size: 18,
+          font: "Arial",
+        }),
+      ],
+    }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      children: [
+        new TextRun({
+          text: (meta.kopHeader2 || "UPTD SATUAN PENDIDIKAN SD NEGERI CERDAS BANGSA").toUpperCase(),
+          bold: true,
+          size: 22,
+          font: "Arial",
+        }),
+      ],
+    }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      children: [
+        new TextRun({
+          text: `Alamat: ${meta.kopAddress || "Jl. Diponegoro No. 10, Kecamatan Nusantara"}`,
+          italics: true,
+          size: 16,
+          font: "Arial",
+          color: "444444",
+        }),
+      ],
+    }),
+  ];
+
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: {
+      top: { style: BorderStyle.NONE, size: 0, color: "auto" },
+      left: { style: BorderStyle.NONE, size: 0, color: "auto" },
+      right: { style: BorderStyle.NONE, size: 0, color: "auto" },
+      bottom: { style: BorderStyle.DOUBLE, size: 18, color: "000000" },
+    },
+    rows: [
+      new TableRow({
+        children: [
+          new TableCell({
+            children: logoChildren,
+            width: { size: 15, type: WidthType.PERCENTAGE },
+          }),
+          new TableCell({
+            children: textChildren,
+            width: { size: 85, type: WidthType.PERCENTAGE },
+          }),
+        ],
+      }),
+    ],
+  });
+};
+
+// Generates the official signatures table for DOCX
+const createDocxSignaturesTable = (meta: any) => {
+  const currentDateStr = new Date().toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
+  const leftChildren = [
+    new Paragraph({
+      children: [
+        new TextRun({ text: "Mengetahui,\n", font: "Arial", size: 20 }),
+        new TextRun({ text: "Kepala Sekolah\n\n\n\n\n", font: "Arial", size: 20 }),
+        new TextRun({ text: meta.headmasterName || "Kepala Sekolah", bold: true, font: "Arial", size: 20 }),
+        new TextRun({ text: `\nNIP. ${meta.headmasterNip || "-"}`, font: "Arial", size: 20 }),
+      ],
+    }),
+  ];
+
+  const rightChildren = [
+    new Paragraph({
+      children: [
+        new TextRun({ text: `Disahkan di: ${meta.schoolName || "Sekolah"}, ${currentDateStr}\n`, font: "Arial", size: 20 }),
+        new TextRun({ text: "Guru Mata Pelajaran\n\n\n\n\n", font: "Arial", size: 20 }),
+        new TextRun({ text: meta.teacherName || "Guru Mata Pelajaran", bold: true, font: "Arial", size: 20 }),
+        new TextRun({ text: `\nNIP. ${meta.teacherNip || "-"}`, font: "Arial", size: 20 }),
+      ],
+    }),
+  ];
+
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: {
+      top: { style: BorderStyle.NONE, size: 0, color: "auto" },
+      bottom: { style: BorderStyle.NONE, size: 0, color: "auto" },
+      left: { style: BorderStyle.NONE, size: 0, color: "auto" },
+      right: { style: BorderStyle.NONE, size: 0, color: "auto" },
+    },
+    rows: [
+      new TableRow({
+        children: [
+          new TableCell({
+            children: leftChildren,
+            width: { size: 50, type: WidthType.PERCENTAGE },
+          }),
+          new TableCell({
+            children: rightChildren,
+            width: { size: 50, type: WidthType.PERCENTAGE },
+          }),
+        ],
+      }),
+    ],
+  });
+};
+
+// Parses potential markdown tables from a question string into actual DOCX Paragraph/Table elements
+const parseCustomQuestionToDocx = (qText: string) => {
+  if (!qText.includes("|")) {
+    return [
+      new Paragraph({
+        children: [new TextRun({ text: qText, font: "Arial", size: 22 })],
+      }),
+    ];
+  }
+
+  const lines = qText.split("\n");
+  const elements: any[] = [];
+  const tableLines: string[][] = [];
+  let inTable = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("|") && trimmed.endsWith("|")) {
+      inTable = true;
+      const cols = trimmed
+        .split("|")
+        .map((c) => c.trim())
+        .filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+      
+      if (!cols.every((c) => c.startsWith("-"))) {
+        tableLines.push(cols);
+      }
+    } else {
+      if (inTable && tableLines.length > 0) {
+        const headerRow = new TableRow({
+          children: tableLines[0].map(
+            (h) =>
+              new TableCell({
+                children: [
+                  new Paragraph({
+                    children: [new TextRun({ text: h, bold: true, font: "Arial", size: 20 })],
+                  }),
+                ],
+              })
+          ),
+        });
+        const bodyRows = tableLines.slice(1).map((row) => {
+          return new TableRow({
+            children: row.map(
+              (cell) =>
+                new TableCell({
+                  children: [
+                    new Paragraph({
+                      children: [new TextRun({ text: cell, font: "Arial", size: 20 })],
+                    }),
+                  ],
+                })
+            ),
+          });
+        });
+        elements.push(
+          new Table({
+            rows: [headerRow, ...bodyRows],
+            width: { size: 100, type: WidthType.PERCENTAGE },
+          })
+        );
+        tableLines.length = 0;
+        inTable = false;
+      }
+      if (trimmed.length > 0) {
+        elements.push(
+          new Paragraph({
+            children: [new TextRun({ text: line, font: "Arial", size: 22 })],
+          })
+        );
+      }
+    }
+  }
+
+  if (tableLines.length > 0) {
+    const headerRow = new TableRow({
+      children: tableLines[0].map(
+        (h) =>
+          new TableCell({
+            children: [
+              new Paragraph({
+                children: [new TextRun({ text: h, bold: true, font: "Arial", size: 20 })],
+              }),
+            ],
+          })
+      ),
+    });
+    const bodyRows = tableLines.slice(1).map((row) => {
+      return new TableRow({
+        children: row.map(
+          (cell) =>
+            new TableCell({
+              children: [
+                new Paragraph({
+                  children: [new TextRun({ text: cell, font: "Arial", size: 20 })],
+                }),
+              ],
+            })
+        ),
+      });
+    });
+    elements.push(
+      new Table({
+        rows: [headerRow, ...bodyRows],
+        width: { size: 100, type: WidthType.PERCENTAGE },
+      })
+    );
+  }
+
+  return elements;
+};
+
 /**
  * Generates DOCX for Kisi-Kisi
  */
 export const generateKisiKisiDocx = async (assessment: GeneratedAssessment) => {
   const meta = assessment.metadata;
 
+  const kopTable = createDocxKopTable(meta);
+
   const titlePara = new Paragraph({
     alignment: AlignmentType.CENTER,
     children: [
-      new TextRun({ text: "KISI-KISI SELEKSI SOAL UJIAN", bold: true, size: 28, font: "Arial" }),
-      new TextRun({ text: `\n${assessment.title.toUpperCase()}`, bold: true, size: 24, font: "Arial" }),
+      new TextRun({ text: "\nKISI-KISI SELEKSI SOAL UJIAN", bold: true, size: 26, font: "Arial" }),
+      new TextRun({ text: `\n${assessment.title.toUpperCase()}`, bold: true, size: 22, font: "Arial" }),
     ],
   });
 
@@ -74,28 +357,28 @@ export const generateKisiKisiDocx = async (assessment: GeneratedAssessment) => {
   const tableHeader = new TableRow({
     tableHeader: true,
     children: [
-      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "No", bold: true })] })] }),
-      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Materi/Topik", bold: true })] })] }),
-      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Tujuan Pembelajaran", bold: true })] })] }),
-      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Indikator Soal", bold: true })] })] }),
-      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Level Kognitif", bold: true })] })] }),
-      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Bentuk", bold: true })] })] }),
-      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "No Soal", bold: true })] })] }),
-      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Kunci", bold: true })] })] }),
+      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "No", bold: true, size: 18 })] })] }),
+      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Materi/Topik", bold: true, size: 18 })] })] }),
+      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Tujuan Pembelajaran", bold: true, size: 18 })] })] }),
+      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Indikator Soal", bold: true, size: 18 })] })] }),
+      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Level Kognitif", bold: true, size: 18 })] })] }),
+      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Bentuk", bold: true, size: 18 })] })] }),
+      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "No Soal", bold: true, size: 18 })] })] }),
+      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Kunci", bold: true, size: 18 })] })] }),
     ],
   });
 
   const tableBodyRows = assessment.kisiKisi.map((k) => {
     return new TableRow({
       children: [
-        new TableCell({ children: [new Paragraph(String(k.no))] }),
-        new TableCell({ children: [new Paragraph(k.material)] }),
-        new TableCell({ children: [new Paragraph(k.tp)] }),
-        new TableCell({ children: [new Paragraph(k.indicator)] }),
-        new TableCell({ children: [new Paragraph(k.cognitiveLevel)] }),
-        new TableCell({ children: [new Paragraph(k.questionType)] }),
-        new TableCell({ children: [new Paragraph(String(k.questionNumber))] }),
-        new TableCell({ children: [new Paragraph(k.answerKey)] }),
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: String(k.no), size: 18 })] })] }),
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: k.material, size: 18 })] })] }),
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: k.tp, size: 18 })] })] }),
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: k.indicator, size: 18 })] })] }),
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: k.cognitiveLevel, size: 18 })] })] }),
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: k.questionType, size: 18 })] })] }),
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: String(k.questionNumber), size: 18 })] })] }),
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: k.answerKey, size: 18 })] })] }),
       ],
     });
   });
@@ -105,18 +388,13 @@ export const generateKisiKisiDocx = async (assessment: GeneratedAssessment) => {
     width: { size: 100, type: WidthType.PERCENTAGE },
   });
 
-  const watermarkPara = new Paragraph({
-    alignment: AlignmentType.RIGHT,
-    children: [
-      new TextRun({ text: "\n\nGenerated by Generator Soal AI - By Muh. Asriwadi AP", italics: true, size: 16, color: "888888" }),
-    ],
-  });
+  const signatures = createDocxSignaturesTable(meta);
 
   const doc = new Document({
     sections: [
       {
         properties: {},
-        children: [titlePara, spacePara, metaTable, spacePara, kisiTable, watermarkPara],
+        children: [kopTable, titlePara, spacePara, metaTable, spacePara, kisiTable, spacePara, signatures],
       },
     ],
   });
@@ -130,83 +408,141 @@ export const generateKisiKisiDocx = async (assessment: GeneratedAssessment) => {
 export const generateSoalDocx = async (assessment: GeneratedAssessment) => {
   const meta = assessment.metadata;
 
-  const headerPara = new Paragraph({
+  const kopTable = createDocxKopTable(meta);
+
+  const titlePara = new Paragraph({
     alignment: AlignmentType.CENTER,
     children: [
-      new TextRun({ text: "LEMBAR SOAL UJIAN", bold: true, size: 28 }),
-      new TextRun({ text: `\n${assessment.title.toUpperCase()}`, bold: true, size: 24 }),
-      new TextRun({ text: `\nTahun Pelajaran: ${meta.academicYear}`, size: 20 }),
+      new TextRun({ text: "\nLEMBAR NASKAH SOAL UJIAN", bold: true, size: 26, font: "Arial" }),
+      new TextRun({ text: `\n${assessment.title.toUpperCase()}`, bold: true, size: 22, font: "Arial" }),
     ],
   });
 
-  const infoPara = new Paragraph({
-    children: [
-      new TextRun({ text: `Mata Pelajaran : ${meta.subject}\n`, bold: true }),
-      new TextRun({ text: `Kelas / Semester : ${meta.className} (${meta.semester})\n` }),
-      new TextRun({ text: `Kurikulum : ${meta.curriculum} | Alokasi Waktu : ${meta.timeAllocation}\n` }),
-      new TextRun({ text: "========================================================================\n" }),
-    ],
+  const spacePara = new Paragraph({ children: [new TextRun({ text: "" })] });
+
+  // Class Meta Table
+  const metaRows = [
+    new TableRow({
+      children: [
+        new TableCell({ children: [new Paragraph("Mata Pelajaran")], width: { size: 25, type: WidthType.PERCENTAGE } }),
+        new TableCell({ children: [new Paragraph(`: ${meta.subject}`)], width: { size: 75, type: WidthType.PERCENTAGE } }),
+      ],
+    }),
+    new TableRow({
+      children: [
+        new TableCell({ children: [new Paragraph("Fase / Kelas")], width: { size: 25, type: WidthType.PERCENTAGE } }),
+        new TableCell({ children: [new Paragraph(`: ${meta.phase || "N/A"} / ${meta.className}`)], width: { size: 75, type: WidthType.PERCENTAGE } }),
+      ],
+    }),
+    new TableRow({
+      children: [
+        new TableCell({ children: [new Paragraph("Semester / Kurikulum")], width: { size: 25, type: WidthType.PERCENTAGE } }),
+        new TableCell({ children: [new Paragraph(`: ${meta.semester} / ${meta.curriculum}`)], width: { size: 75, type: WidthType.PERCENTAGE } }),
+      ],
+    }),
+    new TableRow({
+      children: [
+        new TableCell({ children: [new Paragraph("Alokasi Waktu")], width: { size: 25, type: WidthType.PERCENTAGE } }),
+        new TableCell({ children: [new Paragraph(`: ${meta.timeAllocation}`)], width: { size: 75, type: WidthType.PERCENTAGE } }),
+      ],
+    }),
+  ];
+
+  const metaTable = new Table({
+    rows: metaRows,
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: {
+      top: { style: BorderStyle.NONE, size: 0, color: "auto" },
+      bottom: { style: BorderStyle.SINGLE, size: 12, color: "000000" },
+      left: { style: BorderStyle.NONE, size: 0, color: "auto" },
+      right: { style: BorderStyle.NONE, size: 0, color: "auto" },
+    },
   });
 
   const listItems: any[] = [];
 
   assessment.questions.forEach((q) => {
+    // 1. Render question statement nicely
     listItems.push(
       new Paragraph({
         children: [
-          new TextRun({ text: `\n${q.no}. `, bold: true }),
-          new TextRun({ text: q.question }),
+          new TextRun({ text: `\n${q.no}. `, bold: true, size: 22, font: "Arial" }),
         ],
       })
     );
 
+    // Call dynamic parser to catch markdown tables inside question statement
+    const parsedQuestionElements = parseCustomQuestionToDocx(q.question);
+    parsedQuestionElements.forEach((el) => {
+      listItems.push(el);
+    });
+
+    // 2. Render picture visual instructions box if required
     if (q.illustrationDescription) {
       listItems.push(
-        new Paragraph({
-          children: [
-            new TextRun({ text: `   [Instruksi Ilustrasi/Gambar: ${q.illustrationDescription}]`, italics: true, color: "555555" }),
+        new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          borders: {
+            top: { style: BorderStyle.SINGLE, size: 6, color: "cccccc" },
+            bottom: { style: BorderStyle.SINGLE, size: 6, color: "cccccc" },
+            left: { style: BorderStyle.SINGLE, size: 6, color: "cccccc" },
+            right: { style: BorderStyle.SINGLE, size: 6, color: "cccccc" },
+          },
+          rows: [
+            new TableRow({
+              children: [
+                new TableCell({
+                  children: [
+                    new Paragraph({
+                      alignment: AlignmentType.CENTER,
+                      children: [
+                        new TextRun({ text: "★ [GAMBAR/DIAGRAM INSTRUMEN UJIAN] ★\n", bold: true, size: 18, font: "Arial", color: "444444" }),
+                        new TextRun({ text: q.illustrationDescription, italics: true, size: 18, font: "Arial", color: "666666" }),
+                      ],
+                    }),
+                  ],
+                  shading: { fill: "f9fafb" },
+                }),
+              ],
+            }),
           ],
         })
       );
     }
 
+    // 3. Render options with perfect indentation & styling
     if (q.options && q.options.length > 0) {
       const optionLabels = ["A", "B", "C", "D", "E"];
       q.options.forEach((opt, idx) => {
         listItems.push(
           new Paragraph({
             children: [
-              new TextRun({ text: `    ${optionLabels[idx]}. ${opt}` }),
+              new TextRun({ text: `      ${optionLabels[idx]}. `, bold: true, size: 21, font: "Arial", color: "333333" }),
+              new TextRun({ text: opt, size: 21, font: "Arial", color: "444444" }),
             ],
           })
         );
       });
     } else {
-      // Essay or Isian, add response space helper based on weight
       listItems.push(
         new Paragraph({
           children: [
-            new TextRun({ text: `    [Bobot nilai: ${q.scoreWeight} Guna ruang jawaban secukupnya]`, italics: true, color: "888888" }),
+            new TextRun({ text: `      [Tuliskan Jawaban Uraian Anda - Bobot: ${q.scoreWeight} Poin]`, italics: true, size: 18, color: "888888" }),
           ],
         })
       );
     }
   });
 
-  const divider = new Paragraph({ text: "----------------------- Akhir dari Soal Ujian -----------------------" });
+  const divider = new Paragraph({ text: "\n----------------------- Akhir dari Soal Ujian -----------------------", alignment: AlignmentType.CENTER });
 
-  const watermarkPara = new Paragraph({
-    alignment: AlignmentType.RIGHT,
-    children: [
-      new TextRun({ text: "\n\nGenerated by Generator Soal AI - By Muh. Asriwadi AP", italics: true, size: 16, color: "888888" }),
-    ],
-  });
+  const signatures = createDocxSignaturesTable(meta);
 
   const doc = new Document({
     sections: [
       {
         properties: {},
-        children: [headerPara, infoPara, ...listItems, divider, watermarkPara],
+        children: [kopTable, titlePara, spacePara, metaTable, spacePara, ...listItems, divider, spacePara, signatures],
       },
     ],
   });
@@ -220,13 +556,17 @@ export const generateSoalDocx = async (assessment: GeneratedAssessment) => {
 export const generateKunciDocx = async (assessment: GeneratedAssessment) => {
   const meta = assessment.metadata;
 
-  const headerPara = new Paragraph({
+  const kopTable = createDocxKopTable(meta);
+
+  const titlePara = new Paragraph({
     alignment: AlignmentType.CENTER,
     children: [
-      new TextRun({ text: "KUNCI JAWABAN & PEMBAHASAN", bold: true, size: 28 }),
-      new TextRun({ text: `\n${assessment.title.toUpperCase()}`, bold: true, size: 24 }),
+      new TextRun({ text: "\nKUNCI JAWABAN & RASIONAL PEMBAHASAN", bold: true, size: 26, font: "Arial" }),
+      new TextRun({ text: `\n${assessment.title.toUpperCase()}`, bold: true, size: 22, font: "Arial" }),
     ],
   });
+
+  const spacePara = new Paragraph({ children: [new TextRun({ text: "" })] });
 
   const items: any[] = [];
 
@@ -234,11 +574,11 @@ export const generateKunciDocx = async (assessment: GeneratedAssessment) => {
     items.push(
       new Paragraph({
         children: [
-          new TextRun({ text: `\nNo ${ans.no}. Kunci: `, bold: true }),
-          new TextRun({ text: `${ans.correctAnswer}\n`, bold: true, color: "0055ff" }),
-          new TextRun({ text: "Pembahasan: ", bold: true, italics: true }),
-          new TextRun({ text: `${ans.explanation}\n` }),
-          new TextRun({ text: `Skor Bobot: ${ans.score}`, color: "555555" }),
+          new TextRun({ text: `\nNo ${ans.no}. Kunci Jawaban: `, bold: true, font: "Arial", size: 22 }),
+          new TextRun({ text: `${ans.correctAnswer}\n`, bold: true, font: "Arial", size: 22, color: "0055ff" }),
+          new TextRun({ text: "Pembahasan Rasional: ", bold: true, italics: true, font: "Arial", size: 20 }),
+          new TextRun({ text: `${ans.explanation}\n`, font: "Arial", size: 20, color: "444444" }),
+          new TextRun({ text: `Skor Bobot: ${ans.score} Poin`, font: "Arial", size: 18, color: "666666" }),
         ],
       })
     );
@@ -246,31 +586,26 @@ export const generateKunciDocx = async (assessment: GeneratedAssessment) => {
 
   const guideTitle = new Paragraph({
     children: [
-      new TextRun({ text: "\nPEDOMAN PENSKORAN PENILAIAN", bold: true, size: 20 }),
+      new TextRun({ text: "\nPEDOMAN PENSKORAN PENILAIAN", bold: true, size: 20, font: "Arial" }),
     ],
   });
 
   const guideItems = assessment.scoringGuideline.map((g) => {
     return new Paragraph({
       children: [
-        new TextRun({ text: `- Tipe Soal: ${g.questionType}\n`, bold: true }),
-        new TextRun({ text: `  Bobot per butir: ${g.weightPerQuestion} | Cara penskoran: ${g.description}` }),
+        new TextRun({ text: `- Tipe Soal: ${g.questionType}\n`, bold: true, font: "Arial", size: 18 }),
+        new TextRun({ text: `  Bobot per butir: ${g.weightPerQuestion} | Cara penskoran: ${g.description}`, font: "Arial", size: 18 }),
       ],
     });
   });
 
-  const watermarkPara = new Paragraph({
-    alignment: AlignmentType.RIGHT,
-    children: [
-      new TextRun({ text: "\n\nGenerated by Generator Soal AI - By Muh. Asriwadi AP", italics: true, size: 16, color: "888888" }),
-    ],
-  });
+  const signatures = createDocxSignaturesTable(meta);
 
   const doc = new Document({
     sections: [
       {
         properties: {},
-        children: [headerPara, ...items, guideTitle, ...guideItems, watermarkPara],
+        children: [kopTable, titlePara, spacePara, ...items, spacePara, guideTitle, ...guideItems, spacePara, signatures],
       },
     ],
   });
@@ -287,109 +622,196 @@ export const downloadDocxFile = async (doc: Document, filename: string) => {
 };
 
 /**
- * Generates client jsPDF for offline printing
+ * Generates client jsPDF with Kop & signatures for printing
  */
 export const downloadPdfFile = (type: "kisi" | "soal" | "kunci", assessment: GeneratedAssessment) => {
   const doc = new jsPDF();
   const meta = assessment.metadata;
 
+  // Let's draw Kop in PDF first
+  let y = 15;
+
+  if (meta.uploadedLogoUrl) {
+    try {
+      doc.addImage(meta.uploadedLogoUrl, "PNG", 15, y, 18, 18);
+    } catch (e) {
+      console.warn("Gagal render logo di PDF:", e);
+    }
+  }
+
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
+  doc.setFontSize(10);
+  doc.text((meta.kopHeader1 || "PEMERINTAH KABUPATEN / DINAS PENDIDIKAN").toUpperCase(), 105, y + 4, { align: "center" });
+  doc.setFontSize(12);
+  doc.text((meta.kopHeader2 || "UPTD SATUAN PENDIDIKAN SD NEGERI CERDAS BANGSA").toUpperCase(), 105, y + 10, { align: "center" });
+  
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(8);
+  doc.text(`Alamat: ${meta.kopAddress || "Jl. Diponegoro No. 10, Kecamatan Nusantara"}`, 105, y + 15, { align: "center" });
+
+  doc.setLineWidth(0.8);
+  doc.line(15, y + 18, 195, y + 18);
+  doc.setLineWidth(0.2);
+  doc.line(15, y + 19, 195, y + 19);
+
+  y += 28;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
 
   if (type === "kisi") {
-    doc.text("KISI-KISI SOAL UJIAN", 105, 15, { align: "center" });
-    doc.setFontSize(12);
-    doc.text(assessment.title, 105, 23, { align: "center" });
+    doc.text("KISI-KISI SELEKSI SOAL UJIAN", 105, y, { align: "center" });
+    doc.setFontSize(11);
+    doc.text(assessment.title, 105, y + 6, { align: "center" });
 
+    y += 18;
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.text(`Mata Pelajaran: ${meta.subject}`, 20, 35);
-    doc.text(`Fase/Kelas: ${meta.phase || "Disesuaikan"} / ${meta.className}`, 20, 42);
-    doc.text(`Semester/Kurikulum: ${meta.semester} / ${meta.curriculum}`, 20, 49);
+    doc.setFontSize(9);
+    doc.text(`Mata Pelajaran: ${meta.subject}`, 20, y);
+    doc.text(`Fase/Kelas: ${meta.phase || "Disesuaikan"} / ${meta.className}`, 20, y + 6);
+    doc.text(`Semester/Kurikulum: ${meta.semester} / ${meta.curriculum}`, 20, y + 12);
+    doc.text(`Alokasi Waktu: ${meta.timeAllocation}`, 120, y);
 
-    let y = 60;
+    y += 22;
     doc.setFont("helvetica", "bold");
-    doc.text("Matriks Kisi-kisi Soal:", 20, y);
+    doc.text("Matriks Butir Kisi-kisi Soal:", 20, y);
     y += 8;
 
     doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
     assessment.kisiKisi.forEach((k) => {
-      if (y > 270) {
+      if (y > 250) {
         doc.addPage();
-        y = 20;
-      }
-      doc.text(`No ${k.no}. ${k.material} (TP: ${k.tp.substring(0, 40)}...)`, 20, y);
-      y += 6;
-      doc.text(`   Indikator: ${k.indicator.substring(0, 100)}... Kunci: ${k.answerKey}`, 20, y);
-      y += 8;
-    });
-  } else if (type === "soal") {
-    doc.text("LEMBAR SOAL UJIAN", 105, 15, { align: "center" });
-    doc.setFontSize(12);
-    doc.text(assessment.title, 105, 23, { align: "center" });
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.text(`Mapel: ${meta.subject} | Kelas: ${meta.className} | Waktu: ${meta.timeAllocation}`, 20, 35);
-    doc.text(`Tahun Pelajaran: ${meta.academicYear} | Kurikulum:${meta.curriculum}`, 20, 42);
-
-    let y = 55;
-    assessment.questions.forEach((q) => {
-      if (y > 260) {
-        doc.addPage();
-        y = 20;
+        y = 25;
       }
       doc.setFont("helvetica", "bold");
-      doc.text(`${q.no}. ${q.question.substring(0, 95)}`, 20, y);
-      y += 6;
-      if (q.question.length > 95) {
-        doc.text(q.question.substring(95, 190), 20, y);
-        y += 6;
+      doc.text(`No ${k.no}. Topik: ${k.material}`, 20, y);
+      y += 5;
+      doc.setFont("helvetica", "normal");
+      doc.text(`   TP: ${k.tp.substring(0, 85)}...`, 20, y);
+      y += 5;
+      doc.text(`   Indikator: ${k.indicator.substring(0, 95)}...`, 20, y);
+      y += 5;
+      doc.text(`   Jenis Soal: ${k.questionType} | Kognitif: ${k.cognitiveLevel} | No Soal: ${k.questionNumber} | Kunci: ${k.answerKey}`, 20, y);
+      y += 8;
+    });
+
+  } else if (type === "soal") {
+    doc.text("LEMBAR NASKAH SOAL UJIAN", 105, y, { align: "center" });
+    doc.setFontSize(11);
+    doc.text(assessment.title, 105, y + 6, { align: "center" });
+
+    y += 18;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(`Mapel: ${meta.subject} | Semester: ${meta.semester}`, 20, y);
+    doc.text(`Kelas: ${meta.className} | Kurikulum: ${meta.curriculum}`, 20, y + 6);
+    doc.text(`Alokasi Waktu: ${meta.timeAllocation} | Th Pelajaran: ${meta.academicYear}`, 20, y + 12);
+
+    y += 24;
+    assessment.questions.forEach((q) => {
+      if (y > 245) {
+        doc.addPage();
+        y = 25;
+      }
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      
+      // Print question wrapping
+      const questionLines = doc.splitTextToSize(`${q.no}. ${q.question}`, 170);
+      doc.text(questionLines, 20, y);
+      y += (questionLines.length * 4.5) + 1;
+
+      if (q.illustrationDescription) {
+        const illLines = doc.splitTextToSize(`[Gambar/Diagram Stimulus: ${q.illustrationDescription}]`, 160);
+        doc.setFont("helvetica", "italic");
+        doc.setFillColor(245, 245, 245);
+        doc.rect(23, y - 1, 164, (illLines.length * 4.5) + 3, "F");
+        doc.text(illLines, 25, y + 3);
+        y += (illLines.length * 4.5) + 8;
+        doc.setFont("helvetica", "bold");
       }
 
       if (q.options && q.options.length > 0) {
         doc.setFont("helvetica", "normal");
         const labels = ["A", "B", "C", "D", "E"];
         q.options.forEach((opt, oIdx) => {
-          doc.text(`  ${labels[oIdx]}. ${opt}`, 25, y);
-          y += 6;
+          if (y > 270) {
+            doc.addPage();
+            y = 25;
+          }
+          doc.text(`   ${labels[oIdx]}. ${opt}`, 25, y);
+          y += 5;
         });
       } else {
         doc.setFont("helvetica", "italic");
-        doc.text("  [Jawaban Uraian - Bobot: " + q.scoreWeight + "]", 25, y);
+        doc.text(`   [Ruang Jawaban Uraian - Bobot: ${q.scoreWeight} Poin]`, 25, y);
         y += 6;
       }
-      y += 4;
+      y += 3;
     });
-  } else {
-    doc.text("KUNCI JAWABAN & PEMBAHASAN", 105, 15, { align: "center" });
-    doc.setFontSize(11);
-    doc.text(assessment.title, 105, 23, { align: "center" });
 
-    let y = 35;
+  } else {
+    doc.text("KUNCI JAWABAN & RASIONAL PEMBAHASAN", 105, y, { align: "center" });
+    doc.setFontSize(11);
+    doc.text(assessment.title, 105, y + 6, { align: "center" });
+
+    y += 18;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(`Mapel: ${meta.subject} | Semester: ${meta.semester}`, 20, y);
+    doc.text(`Penyusun: ${meta.teacherName || "Guru Mata Pelajaran"}`, 20, y + 6);
+
+    y += 18;
     assessment.answers.forEach((ans) => {
-      if (y > 260) {
+      if (y > 250) {
         doc.addPage();
-        y = 20;
+        y = 25;
       }
       doc.setFont("helvetica", "bold");
-      doc.text(`No ${ans.no}. Kunci: ${ans.correctAnswer} (Skor: ${ans.score})`, 20, y);
-      y += 6;
+      doc.setFontSize(9);
+      doc.text(`No ${ans.no}. Kunci Jawaban: ${ans.correctAnswer}`, 20, y);
+      y += 5;
       doc.setFont("helvetica", "normal");
-      doc.text(`Pembahasan: ${ans.explanation.substring(0, 95)}`, 20, y);
-      y += 6;
-      if (ans.explanation.length > 95) {
-        doc.text(ans.explanation.substring(95, 190), 20, y);
-        y += 6;
-      }
-      y += 4;
+      const expLines = doc.splitTextToSize(`Pembahasan Rasional: ${ans.explanation}`, 170);
+      doc.text(expLines, 20, y);
+      y += (expLines.length * 4.5) + 6;
     });
   }
 
-  // Add signature Watermark clearly at bottom
+  // Draw Signatures on PDF
+  if (y > 230) {
+    doc.addPage();
+    y = 30;
+  }
+  y += 10;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.text("Mengetahui,", 25, y);
+  doc.text("Kepala Sekolah", 25, y + 5);
+  doc.text("___________________________________", 25, y + 25);
+  doc.setFont("helvetica", "bold");
+  doc.text(meta.headmasterName || "Kepala Sekolah", 25, y + 30);
+  doc.setFont("helvetica", "normal");
+  doc.text(`NIP. ${meta.headmasterNip || "-"}`, 25, y + 35);
+
+  const currentDateText = new Date().toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  doc.text(`Disahkan di: ${meta.schoolName || "Sekolah"}, ${currentDateText}`, 125, y);
+  doc.text("Guru Mata Pelajaran,", 125, y + 5);
+  doc.text("___________________________________", 125, y + 25);
+  doc.setFont("helvetica", "bold");
+  doc.text(meta.teacherName || "Guru Mata Pelajaran", 125, y + 30);
+  doc.setFont("helvetica", "normal");
+  doc.text(`NIP. ${meta.teacherNip || "-"}`, 125, y + 35);
+
+  // Watermark
   doc.setFont("helvetica", "italic");
-  doc.setFontSize(8);
-  doc.setTextColor(120, 120, 120);
+  doc.setFontSize(7.5);
+  doc.setTextColor(140, 140, 140);
   doc.text("Generated by Generator Soal AI - By Muh. Asriwadi AP", 105, 285, { align: "center" });
 
   doc.save(`${type}_${assessment.title.toLowerCase().replace(/\s+/g, "_")}.pdf`);

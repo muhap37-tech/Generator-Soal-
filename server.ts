@@ -32,6 +32,49 @@ async function startServer() {
     console.warn("WARNING: GEMINI_API_KEY environment variable is not set. AI features might fail.");
   }
 
+  // Helper to call Gemini with robust retries, backoff, and fallback model to handle overload/503/Timeout
+  async function generateContentWithRetry(params: any, maxRetries = 3) {
+    let attempt = 0;
+    const originalModel = params.model;
+    while (true) {
+      try {
+        return await ai.models.generateContent(params);
+      } catch (error: any) {
+        attempt++;
+        const errorMessage = error.message || "";
+        const isUnavailable = 
+          errorMessage.includes("503") || 
+          errorMessage.includes("UNAVAILABLE") || 
+          errorMessage.includes("high demand") || 
+          errorMessage.includes("temporarily") ||
+          error.status === 503;
+        
+        const isTimeout = 
+          error.name === "TimeoutError" || 
+          errorMessage.includes("Timeout") || 
+          errorMessage.includes("timeout") || 
+          errorMessage.includes("fetch failed") || 
+          errorMessage.includes("UND_ERR") || 
+          errorMessage.includes("HeadersTimeoutError");
+
+        if ((isUnavailable || isTimeout) && attempt < maxRetries) {
+          // Fallback to gemini-3.1-flash-lite if the original gemini-3.5-flash is temporarily unavailable
+          if (originalModel === "gemini-3.5-flash" && attempt === maxRetries - 1) {
+            console.warn(`[Gemini] Switching model from 'gemini-3.5-flash' to fallback 'gemini-3.1-flash-lite' due to overload/timeout.`);
+            params.model = "gemini-3.1-flash-lite";
+          }
+          
+          const delay = attempt * 2000;
+          console.warn(`[Gemini] API Call failed (${isUnavailable ? "503/Unavailable" : "Timeout"}). Retrying attempt ${attempt}/${maxRetries} in ${delay}ms... Error:`, errorMessage);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          continue;
+        }
+        
+        throw error;
+      }
+    }
+  }
+
   /**
    * 1. Endpoint, generate TP (Tujuan Pembelajaran) and Indikator Soal
    */
@@ -53,7 +96,7 @@ Topik Pembelajaran: ${topicName}
 
 Buatkan 1 Tujuan Pembelajaran (TP) yang ringkas dan padat, serta 1 Indikator Soal yang spesifik yang mencerminkan cara mengukur TP tersebut dalam asesmen.`;
 
-      const response = await ai.models.generateContent({
+      const response = await generateContentWithRetry({
         model: "gemini-3.5-flash",
         contents: prompt,
         config: {
@@ -110,7 +153,7 @@ Kurikulum: ${curriculum}
 
 Buatkan daftar 3 topik pembelajaran terpopuler untuk kelas tersebut sesuai kurikulum yang dipilih. Berikan respon dalam bentuk JSON dengan list 3 topik.`;
 
-      const response = await ai.models.generateContent({
+      const response = await generateContentWithRetry({
         model: "gemini-3.5-flash",
         contents: prompt,
         config: {
@@ -254,7 +297,7 @@ ${
 
 Hasilkan output yang terstruktur rapi sesuai dengan JSON schema yang telah ditentukan. Pastikan sinkronisasi nomor soal antara Kisi-kisi, daftar Soal, dan Kunci Jawaban 100% akurat! Gunakan penomoran berurutan mulai dari angka 1 hingga total jumlah soal yang diminta.`;
 
-      const response = await ai.models.generateContent({
+      const response = await generateContentWithRetry({
         model: "gemini-3.5-flash",
         contents: prompt,
         config: {
